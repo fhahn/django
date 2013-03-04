@@ -1266,7 +1266,15 @@ class Queries4Tests(BaseQuerysetTest):
         self.r3 = Report.objects.create(name='r3')
 
         Item.objects.create(name='i1', created=datetime.datetime.now(), note=n1, creator=self.a1)
-        Item.objects.create(name='i2', created=datetime.datetime.now(), note=n1, creator=self.a3)
+        Item.objects.create(name='i2', created=datetime.datetime.now(), note=n2, creator=self.a3)
+
+    def test_ticket19982(self):
+        n1 = Note.objects.get(note='n1')
+        Item.objects.create(name='i3', created=datetime.datetime.now(), note=n1, creator=self.a3)
+        self.assertQuerysetEqual(
+            Note.objects.filter(item__creator=self.a1).filter(item__name='i3'),
+            Note.objects.filter(item__creator=self.a1, item__name='i3')
+        )
 
     def test_ticket14876(self):
         # Note: when combining the query we need to have information available
