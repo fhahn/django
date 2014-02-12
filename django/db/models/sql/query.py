@@ -18,8 +18,8 @@ from django.db import connections, DEFAULT_DB_ALIAS
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.aggregates import refs_aggregate
 from django.db.models.expressions import ExpressionNode
-from django.db.models.fields import FieldDoesNotExist
-from django.db.models.lookups import Transform
+from django.db.models.fields import FieldDoesNotExist, Field
+from django.db.models.lookups import Transform, default_lookups
 from django.db.models.query_utils import Q
 from django.db.models.related import PathInfo
 from django.db.models.sql import aggregates as base_aggregates_module
@@ -1138,14 +1138,25 @@ class Query(object):
         arg, value = filter_expr
         if not arg:
             raise FieldError("Cannot parse keyword query %r" % arg)
-        lookups, parts, reffed_aggregate = self.solve_lookup_type(arg)
+
+        clause = self.where_class()
+        parts = arg.split(LOOKUP_SEP)
+        if len(parts) > 0 and parts[0] in self.extra:
+            field, lookups = Field(name=parts[0]), parts[1:]
+            col = Col(parts[0], field, field)
+            lookup = default_lookups[lookups[0]](col, value)
+
+            condition = ExtraWhere(['%s %s %s' % (field.name, '%s', value)], [], lookup=lookup)
+            clause.add(condition, AND)
+            return clause, []
+        else:
+            lookups, parts, reffed_aggregate = self.solve_lookup_type(arg)
 
         # Work out the lookup type and remove it from the end of 'parts',
         # if necessary.
         value, lookups = self.prepare_lookup_value(value, lookups, can_reuse)
         used_joins = getattr(value, '_used_joins', [])
 
-        clause = self.where_class()
         if reffed_aggregate:
             condition = self.build_lookup(lookups, reffed_aggregate, value)
             if not condition:
@@ -1330,6 +1341,7 @@ class Query(object):
         (the last used join field), and target (which is a field guaranteed to
         contain the same value as the final field).
         """
+
         path, names_with_path = [], []
         for pos, name in enumerate(names):
             cur_names_with_path = (name, [])

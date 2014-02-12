@@ -11,6 +11,7 @@ from django.conf import settings
 from django.db.models.fields import DateTimeField, Field
 from django.db.models.sql.datastructures import EmptyResultSet, Empty
 from django.db.models.sql.aggregates import Aggregate
+from django.db.models.lookups import default_lookups
 from django.utils.six.moves import xrange
 from django.utils import timezone
 from django.utils import tree
@@ -338,12 +339,15 @@ class NothingNode(object):
 
 
 class ExtraWhere(object):
-    def __init__(self, sqls, params):
+    def __init__(self, sqls, params, lookup=None):
         self.sqls = sqls
         self.params = params
+        self.lookup = lookup
 
     def as_sql(self, qn=None, connection=None):
         sqls = ["(%s)" % sql for sql in self.sqls]
+        if self.lookup and connection:
+            sqls = [sql % self.lookup.get_rhs_op(connection, '') for sql in sqls]
         return " AND ".join(sqls), list(self.params or ())
 
 
